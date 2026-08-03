@@ -50,6 +50,17 @@ class AdminLoginTest extends TestCase
         $this->get('/')->assertRedirect('/login');
     }
 
+    public function test_failed_logins_for_different_emails_do_not_share_one_limit(): void
+    {
+        foreach (range(1, 6) as $attempt) {
+            $this->from('/login')->post('/login', [
+                'email' => "user{$attempt}@example.com",
+                'password' => 'wrong-password',
+            ])->assertRedirect('/login')
+                ->assertSessionHasErrors('email');
+        }
+    }
+
     public function test_admin_can_logout(): void
     {
         $this->withSession(['wa_admin_authenticated' => true])

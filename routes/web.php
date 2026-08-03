@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])
-        ->middleware('throttle:5,1')
+        ->middleware('throttle:login')
         ->name('login.store');
     Route::get('/register', [RegisterController::class, 'create'])->name('register');
     Route::post('/register', [RegisterController::class, 'store'])
-        ->middleware('throttle:5,1')
+        ->middleware('throttle:registration')
         ->name('register.store');
 });
 
@@ -23,7 +23,7 @@ Route::middleware('admin')->group(function () {
     Route::get('/pair/{device}', [DashboardController::class, 'pair'])->name('pair');
     Route::get('/change-password', [ChangePasswordController::class, 'edit'])->name('password.edit');
     Route::put('/change-password', [ChangePasswordController::class, 'update'])
-        ->middleware('throttle:5,1')
+        ->middleware('throttle:password-change')
         ->name('password.update');
 
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
