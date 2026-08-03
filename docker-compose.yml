@@ -1,0 +1,16 @@
+services:
+  wa-engine:
+    build:
+      context: ./wa-engine
+    restart: unless-stopped
+    environment:
+      PORT: 3100
+      WA_ENGINE_SECRET: ${WA_ENGINE_SECRET:-change-this-engine-secret}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - wa-sessions:/app/sessions
+
+volumes:
+  wa-sessions:
