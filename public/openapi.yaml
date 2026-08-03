@@ -1,0 +1,416 @@
+openapi: 3.0.3
+info:
+  title: WA Gateway API
+  version: 1.0.0
+  description: |
+    API multi-device untuk menghubungkan akun WhatsApp melalui QR dan mengirim pesan.
+
+    Klik **Authorize**, masukkan API key dari `WA_GATEWAY_API_KEY` di file `.env`,
+    lalu gunakan tombol **Try it out** pada endpoint yang ingin dicoba.
+  contact:
+    name: WA Gateway
+servers:
+  - url: /api/v1
+    description: Server Laravel saat ini
+tags:
+  - name: Devices
+    description: Kelola dan hubungkan perangkat WhatsApp
+  - name: Messages
+    description: Kirim dan lihat riwayat pesan
+security:
+  - bearerAuth: []
+paths:
+  /devices:
+    get:
+      tags: [Devices]
+      summary: Daftar semua device
+      operationId: listDevices
+      responses:
+        '200':
+          description: Daftar device
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Devices]
+      summary: Buat device baru
+      description: Membuat identitas device. Panggil endpoint connect setelah device dibuat.
+      operationId: createDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  example: Customer Service
+      responses:
+        '201':
+          description: Device berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /devices/{device}:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    get:
+      tags: [Devices]
+      summary: Lihat status device
+      operationId: getDevice
+      responses:
+        '200':
+          description: Detail dan status device
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Devices]
+      summary: Hapus device dan sesi
+      operationId: deleteDevice
+      responses:
+        '204':
+          description: Device berhasil dihapus
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
+  /devices/{device}/connect:
+    post:
+      tags: [Devices]
+      summary: Mulai koneksi dan pembuatan QR
+      description: Setelah dipanggil, poll endpoint QR hingga field `qr` terisi.
+      operationId: connectDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '202':
+          description: Proses koneksi dimulai
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Device'
+                  qr:
+                    type: string
+                    nullable: true
+                    description: Nilai mentah QR WhatsApp
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
+  /devices/{device}/qr:
+    get:
+      tags: [Devices]
+      summary: Ambil QR dan status koneksi terbaru
+      operationId: getDeviceQr
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Status dan QR terbaru
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Device'
+                  qr:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
+  /devices/{device}/disconnect:
+    post:
+      tags: [Devices]
+      summary: Putuskan device sementara
+      description: Kredensial sesi tetap disimpan dan dapat disambungkan kembali.
+      operationId: disconnectDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device diputus sementara
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
+  /devices/{device}/logout:
+    post:
+      tags: [Devices]
+      summary: Logout dan hapus sesi WhatsApp
+      operationId: logoutDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Device logout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
+  /devices/{device}/messages:
+    parameters:
+      - $ref: '#/components/parameters/DeviceId'
+    get:
+      tags: [Messages]
+      summary: Riwayat pesan device
+      operationId: listMessages
+      responses:
+        '200':
+          description: Riwayat pesan dengan pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PaginatedMessages'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Messages]
+      summary: Kirim pesan teks
+      description: Device harus berstatus `connected`. Nomor harus menggunakan kode negara.
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient, message]
+              properties:
+                recipient:
+                  type: string
+                  example: '628123456789'
+                  description: Nomor dengan kode negara, tanpa tanda tambah
+                message:
+                  type: string
+                  maxLength: 4096
+                  example: Halo dari WA Gateway
+      responses:
+        '201':
+          description: Pesan berhasil dikirim
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Device belum terhubung
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '502':
+          description: Pengiriman melalui WhatsApp gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Masukkan nilai `WA_GATEWAY_API_KEY` dari file `.env`
+  parameters:
+    DeviceId:
+      name: device
+      in: path
+      required: true
+      description: UUID device
+      schema:
+        type: string
+        format: uuid
+        example: 01984fca-b7a8-7282-b1e7-21479e2b6ae0
+  responses:
+    Unauthorized:
+      description: API key tidak valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Device tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Data request tidak valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    EngineUnavailable:
+      description: WhatsApp engine tidak dapat dihubungi
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone_number:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [disconnected, connecting, qr, connected, logged_out, error]
+        last_error:
+          type: string
+          nullable: true
+        connected_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DeviceResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Device'
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          format: uuid
+        recipient:
+          type: string
+        body:
+          type: string
+        status:
+          type: string
+          enum: [pending, sent, failed]
+        provider_message_id:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PaginatedMessages:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        first_page_url:
+          type: string
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
