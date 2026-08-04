@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Device;
+use App\Models\Message;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -48,7 +49,7 @@ class DeviceApiTest extends TestCase
             ->assertJsonPath('qr', 'sample-qr-value');
     }
 
-    public function test_connected_device_can_send_a_message(): void
+    public function test_connected_device_can_queue_and_scheduler_sends_a_message(): void
     {
         $device = Device::create(['name' => 'Sales', 'status' => 'connected']);
 
@@ -64,14 +65,39 @@ class DeviceApiTest extends TestCase
                 'recipient' => '+62 812-3456-789',
                 'message' => 'Halo dari gateway',
             ])
-            ->assertCreated()
-            ->assertJsonPath('data.status', 'sent')
-            ->assertJsonPath('data.provider_message_id', 'ABC123');
+            ->assertStatus(202)
+            ->assertJsonPath('data.status', 'queued');
 
         $this->assertDatabaseHas('messages', [
             'device_id' => $device->id,
             'recipient' => '628123456789',
-            'status' => 'sent',
+            'status' => 'queued',
         ]);
+
+        Message::query()->update(['scheduled_at' => now()->subSecond()]);
+        $this->artisan('messages:dispatch')->assertSuccessful();
+
+        $this->assertDatabaseHas('messages', [
+            'device_id' => $device->id,
+            'status' => 'sent',
+            'provider_message_id' => 'ABC123',
+        ]);
+    }
+
+    public function test_every_message_is_scheduled_thirty_seconds_after_the_previous_slot(): void
+    {
+        $device = Device::create(['name' => 'Antrean', 'status' => 'connected']);
+        $startedAt = now();
+
+        foreach (['Pesan pertama', 'Pesan kedua'] as $body) {
+            $this->withToken('test-api-key')->postJson("/api/v1/devices/{$device->id}/messages", [
+                'recipient' => '628123456789',
+                'message' => $body,
+            ])->assertStatus(202);
+        }
+
+        $messages = Message::query()->orderBy('scheduled_at')->get();
+        $this->assertSame(30, $messages[0]->scheduled_at->timestamp - $startedAt->timestamp);
+        $this->assertSame(30, $messages[1]->scheduled_at->timestamp - $messages[0]->scheduled_at->timestamp);
     }
 }

@@ -244,8 +244,8 @@ paths:
                   maxLength: 4096
                   example: Halo dari WA Gateway
       responses:
-        '201':
-          description: Pesan berhasil dikirim
+        '202':
+          description: Pesan diterima dan masuk antrean terjadwal
           content:
             application/json:
               schema:
@@ -364,7 +364,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, sent, failed]
+          enum: [queued, processing, paused, sent, failed]
         provider_message_id:
           type: string
           nullable: true

@@ -529,7 +529,7 @@ elements.sendForm.addEventListener('submit', async (event) => {
             }),
         });
         closeModal(elements.sendModal);
-        toast('Pesan berhasil dikirim.');
+        toast('Pesan masuk antrean pengiriman.');
         await loadMessages();
     } catch (error) {
         toast(error.message, 'error');

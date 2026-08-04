@@ -178,6 +178,39 @@ Nomor tujuan memakai kode negara tanpa tanda `+`.
 | `GET` | `/api/v1/messages` | Riwayat pesan sesuai pemilik key |
 | `POST` | `/api/v1/devices/{id}/messages` | Kirim pesan |
 
+## Scheduler pengiriman aman
+
+Request pengiriman tidak lagi diteruskan langsung ke WhatsApp. Pesan disimpan
+dengan status `queued`, lalu Laravel Scheduler mengirim maksimal satu pesan per
+device pada setiap putaran dengan jeda tetap 30 detik. Batasnya tetap maksimal
+20 pesan per jam dan 60 pesan per hari per device.
+
+Jalankan scheduler lokal dengan:
+
+```bash
+php artisan schedule:work
+```
+
+Di server, pasang satu cron yang berjalan setiap menit:
+
+```cron
+* * * * * cd /path/ke/wa-gateway && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Sesuaikan batas melalui `.env`:
+
+```env
+WA_SEND_DELAY_SECONDS=30
+WA_SEND_HOURLY_LIMIT=20
+WA_SEND_DAILY_LIMIT=60
+WA_SEND_MAX_ATTEMPTS=3
+```
+
+Jika engine mengembalikan indikasi pembatasan seperti `463`, `restricted`, atau
+`new chat limit`, seluruh antrean device tersebut diubah menjadi `paused` agar
+sistem tidak terus mencoba. Throttling mengurangi lonjakan, tetapi tidak dapat
+menjamin WhatsApp tidak membatasi akun, khususnya untuk chat baru otomatis.
+
 ## Testing dan pemeriksaan kode
 
 ```bash

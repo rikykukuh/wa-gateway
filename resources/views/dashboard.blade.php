@@ -102,7 +102,9 @@
         .message-recipient { white-space:nowrap; font-family:ui-monospace,monospace; }
         .message-status { display:inline-block; padding:4px 7px; border-radius:999px; font-size:9px; font-weight:850; text-transform:uppercase; }
         .message-status.sent { color:#087653; background:#daf7ec; }
-        .message-status.pending { color:#80610a; background:#fff3c7; }
+        .message-status.pending,.message-status.queued { color:#80610a; background:#fff3c7; }
+        .message-status.processing { color:#155c9a; background:#dceeff; }
+        .message-status.paused { color:#88461d; background:#ffe6d5; }
         .message-status.failed { color:#a83232; background:#fde5e5; }
         .message-empty { padding:34px 20px; color:var(--muted); text-align:center; }
         .key-warning { margin-bottom:14px; padding:11px; border-radius:9px; color:#755b0a; background:#fff5ce; font-size:12px; line-height:1.5; }

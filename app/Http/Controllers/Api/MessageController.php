@@ -7,15 +7,12 @@ use App\Http\Requests\SendMessageRequest;
 use App\Models\ApiClient;
 use App\Models\Device;
 use App\Models\Message;
-use App\Services\WhatsAppEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Throwable;
+use Illuminate\Support\Carbon;
 
 class MessageController extends Controller
 {
-    public function __construct(private readonly WhatsAppEngine $engine) {}
-
     public function all(Request $request): JsonResponse
     {
         $client = $request->attributes->get('api_client');
@@ -53,37 +50,19 @@ class MessageController extends Controller
         }
 
         $validated = $request->validated();
+        $scheduledAt = $this->nextScheduleFor($device);
         $message = Message::create([
             'device_id' => $device->id,
             'recipient' => $validated['recipient'],
             'body' => $validated['message'],
-            'status' => 'pending',
+            'status' => 'queued',
+            'scheduled_at' => $scheduledAt,
         ]);
 
-        try {
-            $result = $this->engine->sendText(
-                $device->id,
-                $validated['recipient'],
-                $validated['message'],
-            );
-
-            $message->update([
-                'status' => 'sent',
-                'provider_message_id' => $result['messageId'] ?? null,
-                'sent_at' => now(),
-            ]);
-
-            return response()->json(['data' => $message->fresh()], 201);
-        } catch (Throwable $exception) {
-            $message->update(['status' => 'failed', 'error' => $exception->getMessage()]);
-            report($exception);
-
-            return response()->json([
-                'message' => 'Pesan gagal dikirim.',
-                'data' => $message->fresh(),
-                'error' => app()->isLocal() ? $exception->getMessage() : null,
-            ], 502);
-        }
+        return response()->json([
+            'message' => 'Pesan masuk antrean pengiriman.',
+            'data' => $message->fresh(),
+        ], 202);
     }
 
     private function enforceClientLimits(Request $request, Device $device): ?JsonResponse
@@ -98,7 +77,7 @@ class MessageController extends Controller
 
         $sentToday = Message::query()
             ->whereHas('device', fn ($query) => $query->where('api_client_id', $client->id))
-            ->whereIn('status', ['pending', 'sent'])
+            ->whereIn('status', ['queued', 'processing', 'sent'])
             ->whereDate('created_at', today())
             ->count();
 
@@ -110,23 +89,18 @@ class MessageController extends Controller
             ], 429);
         }
 
-        $lastMessage = Message::query()
-            ->whereHas('device', fn ($query) => $query->where('api_client_id', $client->id))
-            ->where('status', 'sent')
-            ->latest('sent_at')
-            ->first();
-
-        if ($lastMessage?->sent_at) {
-            $elapsed = (int) $lastMessage->sent_at->diffInSeconds(now());
-            $retryAfter = max(0, $client->min_delay_seconds - $elapsed);
-            if ($retryAfter > 0) {
-                return response()->json([
-                    'message' => "Tunggu {$retryAfter} detik sebelum mengirim pesan berikutnya.",
-                    'retry_after' => $retryAfter,
-                ], 429)->header('Retry-After', (string) $retryAfter);
-            }
-        }
-
         return null;
+    }
+
+    private function nextScheduleFor(Device $device): Carbon
+    {
+        $delay = (int) config('wa-gateway.scheduler.delay_seconds', 30);
+        $lastSlot = $device->messages()
+            ->whereIn('status', ['queued', 'processing'])
+            ->latest('scheduled_at')
+            ->value('scheduled_at');
+        $base = $lastSlot ? Carbon::parse($lastSlot) : now();
+
+        return $base->max(now())->addSeconds($delay);
     }
 }
